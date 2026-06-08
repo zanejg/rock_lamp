@@ -1,0 +1,11 @@
+#!/bin/bash
+#  To write the pytho code to ESP32
+
+ampy -p /dev/ttyUSB0 put /home/zane/programming/bedlamp/python/e32LEDdriver.py 
+ampy -p /dev/ttyUSB0 put /home/zane/programming/bedlamp/python/lamp_page.html
+ampy -p /dev/ttyUSB0 put /home/zane/programming/bedlamp/python/LED_control.py
+ampy -p /dev/ttyUSB0 put /home/zane/programming/bedlamp/python/secret_settings.py
+ampy -p /dev/ttyUSB0 put /home/zane/programming/bedlamp/python/main.py
+ampy -p /dev/ttyUSB0 put /home/zane/programming/bedlamp/python/uweb_boot.py boot.py
+
+

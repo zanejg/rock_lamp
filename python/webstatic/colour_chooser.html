@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+        
+
+        <!-- <link href="http://magicball:5000/coljoecss/colorjoe.css" rel="stylesheet">
+        <script src="http://magicball:5000/coljoedist/colorjoe.js" /> -->
+
+        <script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5"></script>
+        
+    
+
+    </head>
+    <body>
+        <div class="navbar"><span>Control the Dragon's Eye</span></div>
+
+        <script>
+            var colorPicker = new iro.ColorPicker('#colour_chooser');
+            var which_led = 'all';
+            var token = "";
+
+            function set_which(led_num){
+                which_led = led_num;
+            }
+            function set_lamps(colour){
+                if(which_led=='all'){
+
+
+                }
+            }
+            
+
+            function gettoken() {
+                var xhttp = new XMLHttpRequest();
+                xhttp.onreadystatechange = function() {
+                    if (this.readyState == 4 && this.status == 200) {
+
+                        token_resp = JSON.parse(this.responseText)
+                        token = token_resp['key']
+                        //alert(token);
+
+                    }
+                };
+                xhttp.open("GET", "http://magicball:5000/gettoken/", true);
+                xhttp.setRequestHeader("Content-type", "application/json");
+                xhttp.send();
+            }
+            gettoken();
+
+            function set_all(color) {
+                var xhttp = new XMLHttpRequest();
+                xhttp.onreadystatechange = function() {
+                    if (this.readyState == 4 && this.status == 200) {
+                        
+                        resp = JSON.parse(this.responseText)
+                        //alert(token);
+
+                    }
+                };
+                colour = color.hexString.substring(1,7)
+                //alert(colour);
+                the_url = "http://magicball:5000/set-all-lamps/?key="+token+"&hex="+colour
+
+
+                xhttp.open("GET",the_url , true);
+                xhttp.setRequestHeader("Content-type", "application/json");
+                xhttp.send();
+            }
+
+
+
+
+
+            // listen to a color picker's color:change event
+            // color:change callbacks receive the current color
+            colorPicker.on('color:change', function(color) {
+                // log the current color as a HEX string
+                console.log(color.hexString);
+                set_all(color);
+            });
+
+        </script>
+
+        <div class="demo">
+            <h1>Dragon's Eye Colorpicker</h1>
+        </div>
+        
+        <div id="colour_chooser"></div>
+    
+        
+
+
+    </body>
+</html>

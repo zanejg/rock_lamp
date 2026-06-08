@@ -1,0 +1,46 @@
+#!/bin/bash
+
+cmd=$1
+
+if [ "$cmd" == "trashold" ];then
+    # trash the present contents of the ESP32
+    esptool.py --port /dev/ttyUSB0 erase_flash
+
+    # rewite the MicroPython
+    # old version esp32-ota-20220618-v1.19.1.bin
+    esptool.py --chip esp32 --port /dev/ttyUSB0 \
+        write_flash -z 0x1000 ~/Downloads/esp32-20230426-v1.20.0.bin
+fi
+
+
+# the system boot file
+echo "Writing boot.py"
+ampy -p /dev/ttyUSB0 put uweb_boot.py boot.py
+echo "written boot.py"
+
+# settings
+echo "Writing secret_settings.py"
+ampy -p /dev/ttyUSB0 put secret_settings.py
+echo "written secret_settings.py"
+
+
+# LED drivers
+echo "Writing LED_control"
+ampy -p /dev/ttyUSB0 put LED_control.py
+echo "Written LED_control.py"
+echo "Writing e32LEDdriver.py"
+ampy -p /dev/ttyUSB0 put e32LEDdriver.py
+echo "Written e32LEDdriver.py"
+
+# the UI web page
+echo "Writing lamp_page.html"
+ampy -p /dev/ttyUSB0 put lamp_page.html
+echo "Written lamp_page.html"
+
+# the main file to run
+echo "Writing main.py"
+ampy -p /dev/ttyUSB0 put main.py
+echo "Written main.py"
+
+echo "Finished"
+
