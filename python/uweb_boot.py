@@ -17,15 +17,16 @@ import secret_settings
 
 gc.collect()
 
-ssid = secret_settings.ssid
-password = secret_settings.password
+# for when we are connecting to the wifi 
+# ssid = secret_settings.ssid
+# password = secret_settings.password
 
-station = network.WLAN(network.STA_IF)
+# station = network.WLAN(network.STA_IF)
 
 
-station.active(True)
-print(station.config(dhcp_hostname = "zlamp"))
-station.connect(ssid, password)
+# station.active(True)
+# print(station.config(dhcp_hostname = "zlamp"))
+# station.connect(ssid, password)
 
 while station.isconnected() == False:
     pass

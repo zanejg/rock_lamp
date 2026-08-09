@@ -82,10 +82,17 @@ class dimming_sequencer(object):
             max_col = "GREEN"
         if levels['BLUE'] > levels[max_col]:
             max_col = "BLUE"
+        if "WHITE" in levels and levels['WHITE'] > levels[max_col]:
+            max_col = "WHITE"
         max_level = float(levels[max_col])
         lesser_cols = [col for col,v in levels.items() if col != max_col]
-        lesser_levels = {lesser_cols[0]:levels[lesser_cols[0]],
-                        lesser_cols[1]:levels[lesser_cols[1]]}
+        
+        if len(lesser_cols) >= 2:
+            lesser_levels = {col:levels[col] for col in lesser_cols}
+        else:
+            raise ValueError(
+                "Colour {} is not valid as it does not have at least 2 lesser colours".format(rgbstr)) 
+
         
         
 
@@ -111,7 +118,7 @@ class dimming_sequencer(object):
         
         # to save memory use
         # we need to replace the big sequence of floats in a log sequence with just the 
-        # log sequence of linearly increasing floats we then can conertha the log value with a call to 
+        # log sequence of linearly increasing floats we then can convert the log value with a call to 
         # a convertor function
         stepped_dimming_seq = [self.linear_to_log(rawi) for rawi in linear_sequence]
         
@@ -130,19 +137,27 @@ class dimming_sequencer(object):
         # the max colour will be the same as the stepped_dimming_seq
         # because it will go from zero to 1
         # the others will be multiplied by their ratios
-        lesser_col0 = [lesser_ratios[lesser_cols[0]] * sd for sd in stepped_dimming_seq]
-        lesser_col1 = [lesser_ratios[lesser_cols[1]] * sd for sd in stepped_dimming_seq]
+        # lesser_col0 = [lesser_ratios[lesser_cols[0]] * sd for sd in stepped_dimming_seq]
+        # lesser_col1 = [lesser_ratios[lesser_cols[1]] * sd for sd in stepped_dimming_seq]
+        # lesser_col2 = [lesser_ratios[lesser_cols[2]] * sd for sd in stepped_dimming_seq] \
+        #     if len(lesser_cols) == 3 else None
+        
+        lesser_col_seqs  = [
+            [lesser_ratios[col] * sd for sd in stepped_dimming_seq] for col in lesser_cols
+        ]
         
         
-        # return a dict with 3 dimming sequences identified by colour
+        # return a dict with 3 or 4 dimming sequences identified by colour
         # and a position for the given RGB colour in the dimming sequence
+        sequences = {
+            max_col:stepped_dimming_seq,}
+        
+        for col, seq in zip(lesser_cols, lesser_col_seqs):
+            sequences[col] = seq
+
         return {
             "position":position,
-            "sequences": {
-                max_col:stepped_dimming_seq,
-                lesser_cols[0]:lesser_col0,
-                lesser_cols[1]:lesser_col1,
-            },
+            "sequences": sequences,
         }
 
 
@@ -156,9 +171,16 @@ colour_sequencer = dimming_sequencer()
 class Direct_LED_driver(object):
     """
     Adaptation of driver written for the Magicball
-    Especially for use with ESP32
+    Especially for use with ESP32.
+    To control an array of 3 LEDs with PWM on the ESP32.
+
     """
-    fPWM = 250
+    # the frequency of the PWM signal. Although the ESP32 can do much higher frequencies, 
+    # we are using the lower frequency to get us dimming resolution which was the main point 
+    # of the bedlamp project. The higher frequencies give us more steps but there is a 
+    # trade off with the resolution of the dimming. 
+    # The lower frequencies give us more steps but they are more visible as a flicker.
+    fPWM = 500
     
     def __init__(self,channels):
         """
@@ -168,26 +190,24 @@ class Direct_LED_driver(object):
               "RED" : 0,
             "GREEN" : 1,
              "BLUE" : 2,
+             "WHITE" : 3, # not required but can be used for a white LED if you have one
         }
-        On the ESP32 the PWM levels are a 16 integer
+        On the ESP32 the PWM levels are a 16 bit integer
         i.e. 0 - 65535
-
-
         """
-        
-        # self.bus = SMBus(1) # Raspberry Pi revision 2
-        # self.pwm = PWM(self.bus, self.i2c_address)
-        # self.pwm.setFreq(self.fPWM)
-
         
 
         self.channels = channels
 
-        self.pins = {
-              "RED" : PWM(Pin(channels['RED']), freq=self.fPWM ),
-            "GREEN" : PWM(Pin(channels['GREEN']), freq=self.fPWM),
-             "BLUE" : PWM(Pin(channels['BLUE']), freq=self.fPWM),
-        }
+        # self.pins = {
+        #       "RED" : PWM(Pin(channels['RED']), freq=self.fPWM ),
+        #     "GREEN" : PWM(Pin(channels['GREEN']), freq=self.fPWM),
+        #      "BLUE" : PWM(Pin(channels['BLUE']), freq=self.fPWM),
+        # }
+
+        self.pins = {col: PWM(Pin(channels[col]), freq=self.fPWM) for col in channels.keys()}
+
+
         # for col,this_pin in self.pins.items():
         #     this_pin.
 
@@ -198,6 +218,7 @@ class Direct_LED_driver(object):
     
     def set_led(self,colour,rawduty):
         """
+        Colour is a string "RED","GREEN" or "BLUE" and "WHITE" if you have a white LED
         rawduty is a 0-1 float
         So must be converted to the ESP32's level
         """
@@ -209,7 +230,7 @@ class Direct_LED_driver(object):
         self.pins[colour].duty_u16(duty)
 
     def turn_off(self):
-        for col in ['RED','GREEN','BLUE']:
+        for col in self.channels.keys():
             self.pins[col].duty_u16(0)
 
 
@@ -220,6 +241,11 @@ class Direct_LED_driver(object):
         return float(the_int/255.0) 
     
     def rgb_to_levels(self,rgb):
+        """
+        Takes a 6 or 8 digit RGB hex string 
+        and returns a dict of the levels for each colour as floats between 0-1"""
+
+
         
         levels = {
         "RED" :  {'level':self.hex_to_level(rgb[0:2]),
@@ -229,6 +255,13 @@ class Direct_LED_driver(object):
         "BLUE" : {'level':self.hex_to_level(rgb[4:6]),
                   'hex':rgb[4:6]},
         }
+        if "WHITE" in self.channels.keys():
+            if len(rgb) == 8:
+                levels["WHITE"] = {'level':self.hex_to_level(rgb[6:8]),
+                                   'hex':rgb[6:8]}
+            else:
+                levels["WHITE"] = {'level':0.0,
+                                   'hex':"00"}
         return levels
 
     def light_with_RGB(self,the_RGB, stepcount=64):
@@ -257,11 +290,18 @@ class Direct_LED_driver(object):
         # first set things up
         self.setup_sequence(the_RGB, stepcount)
         
+        # self.light_with_floats({
+        #     "RED": self.dim_seq['RED'][seq_posi],
+        #     "GREEN":self.dim_seq['GREEN'][seq_posi] ,
+        #     "BLUE":self.dim_seq['BLUE'][seq_posi]   
+        # },reset_seq=False)
+
+        # we are now ensuring white will be dealt with
         self.light_with_floats({
-            "RED": self.dim_seq['RED'][seq_posi],
-            "GREEN":self.dim_seq['GREEN'][seq_posi] ,
-            "BLUE":self.dim_seq['BLUE'][seq_posi]   
+            col: self.dim_seq[col][seq_posi] for col in self.dim_seq.keys()
         },reset_seq=False)
+
+
 
         self.RGB = the_RGB
         self.dim_posi = seq_posi
@@ -300,12 +340,13 @@ class Direct_LED_driver(object):
 
     
     def get_posi_duties(self):
-        return {
-            "RED": self.dim_seq['RED'][self.dim_posi],
-            "GREEN":self.dim_seq['GREEN'][self.dim_posi] ,
-            "BLUE":self.dim_seq['BLUE'][self.dim_posi]
+        # return {
+        #     "RED": self.dim_seq['RED'][self.dim_posi],
+        #     "GREEN":self.dim_seq['GREEN'][self.dim_posi] ,
+        #     "BLUE":self.dim_seq['BLUE'][self.dim_posi]
             
-        }
+        # }
+        return {col:self.dim_seq[col][self.dim_posi] for col in self.dim_seq.keys()}
     
     def get_posi(self):
         """
@@ -332,10 +373,14 @@ class Direct_LED_driver(object):
 
         self.dim_posi = posi
 
+        # self.light_with_floats({
+        #     "RED": self.dim_seq['RED'][posi],
+        #     "GREEN":self.dim_seq['GREEN'][posi] ,
+        #     "BLUE":self.dim_seq['BLUE'][posi]   
+        # },reset_seq=False)
+
         self.light_with_floats({
-            "RED": self.dim_seq['RED'][posi],
-            "GREEN":self.dim_seq['GREEN'][posi] ,
-            "BLUE":self.dim_seq['BLUE'][posi]   
+            col: self.dim_seq[col][posi] for col in self.channels.keys()
         },reset_seq=False)
 
 
@@ -370,104 +415,6 @@ class Direct_LED_driver(object):
         
     
     
-    
-
-class four_LED_driver(object):
-    def __init__(self,LEDs):
-        """
-        Takes list of 4 LED driver dicts
-        """
-        
-        self.LEDs = [Direct_LED_driver(LED) for LED in LEDs]
-        
-    def all_same_RGB(self,the_RGB):
-        for this_LED in self.LEDs:
-            this_LED.light_with_RGB(the_RGB)
-
-    def all_same_saved(self, saved_levels):
-        for idx,this_LED in enumerate(self.LEDs):
-            this_LED.lights_to_saved_levels(saved_levels['RGB'], 
-                                            saved_levels['seq_position'])
-    
-    def get_current_levels(self):
-        """
-        Get all of the LEDs levels
-        """
-        ret = [ll.get_exact_levels() 
-               for ll in self.LEDs]
-        print("CURRENT LEVELS = {}".format(ret))
-        return ret
-
-
-    def all_same_float(self,the_duties):
-        """
-        For this we need a dict with a float for each col
-        """
-        for this_LED in self.LEDs:
-            for col,duty in the_duties.items():
-                this_LED.set_led(col,duty)
-        
-    def all_off(self):
-        for this_LED in self.LEDs:
-            this_LED.turn_off()
-        
-    def set_each(self,the_leds):
-        """
-        Takes a list of dicts each keyed by colour
-        """
-        for lednum,this_led in enumerate(the_leds):
-            self.LEDs[lednum].light_with_floats(this_led)
-            # for col,duty in this_led.items():
-            #     self.LEDs[lednum].set_led(col,duty)
-
-    def set_all_on_seq(self, posi):
-        for this_LED in self.LEDs:
-            this_LED.set_brightness_on_seq(posi)
-    
-    def step_one_colour(self, colour,direction):
-        """
-        Brighten or dim one colour on all the LEDs 
-        by 32 out of 256 = 256/8
-        direction = "dim" or "brighten"
-        """
-        step_size = 32
-        dir_coeff = -1 if direction=="dim" else 1
-        
-        rgb_list = []
-        for this_led in self.LEDs:
-            the_RGB = ""
-            #import pdb;pdb.set_trace()
-            for this_col in ['RED','GREEN','BLUE']:
-                if this_col == colour:
-                    current_col = int(this_led.levels[this_col]['hex'],16)
-                    if (dir_coeff == -1 and current_col == 0 or
-                        dir_coeff == 1 and current_col > 233):
-                        # set the travel limits
-                        dir_coeff =0
-                    
-                    new_col = current_col + (step_size * dir_coeff)
-                    the_RGB += "00" if new_col < 19 else hex(new_col)[2:]
-                else:
-                    the_RGB += this_led.levels[this_col]['hex']
-            
-            rgb_list.append(the_RGB)
-            
-        #import pdb;pdb.set_trace()
-        self.set_each_RGB(rgb_list)
-            
-            
-    def set_each_RGB(self,the_leds):
-        """
-        Takes a list of RGBs
-        Will also create the dimming sequences for each and
-        set them up.
-        If an entry is None it will skip it.
-        """
-        for lednum,this_RGB in enumerate(the_leds):
-            if this_RGB is not None:
-                self.LEDs[lednum].light_with_RGB(this_RGB)
-            
-
 
 def rgb_to_ints(rgb):        
         levels = {

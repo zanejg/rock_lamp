@@ -1,0 +1,4 @@
+parametric
+    Size :: slider[1,5] = 3;
+in
+cube Size
