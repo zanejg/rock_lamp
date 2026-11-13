@@ -5,7 +5,7 @@ TAIL_WD = 10;
 TAIL_HT = 3;
 TOOTH_BITE = 2;
 
-segment_rad = 5;
+segment_rad = 25;
 
 
 
